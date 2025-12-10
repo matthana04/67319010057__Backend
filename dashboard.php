@@ -1,31 +1,43 @@
 <?php
 require_once __DIR__ . '/../inc/config.php';
 require_once __DIR__ . '/../inc/functions.php';
-require_role('admin');
-// load some counts
-$c1 = $pdo->query('SELECT COUNT(*) FROM users')->fetchColumn();
-$c2 = $pdo->query('SELECT COUNT(*) FROM products')->fetchColumn();
-$c3 = $pdo->query('SELECT COUNT(*) FROM orders')->fetchColumn();
+require_role('seller');
+// load seller id
+$user = current_user();
+$stmt = $pdo->prepare('SELECT id FROM sellers WHERE user_id = ?');
+$stmt->execute([$user['id']]);
+$seller = $stmt->fetch();
+if(!$seller){ die('No seller record.'); }
+$sid = $seller['id'];
+// CRUD products basic
+if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['action'])){
+    if($_POST['action']==='create'){
+        $stmt = $pdo->prepare('INSERT INTO products (seller_id,name,description,price,approved,created_at) VALUES (?,?,?,?,0,NOW())');
+        $stmt->execute([$sid, $_POST['name'], $_POST['description'], $_POST['price']]);
+    }
+}
+$products = $pdo->prepare('SELECT * FROM products WHERE seller_id = ?');
+$products->execute([$sid]);
+$products = $products->fetchAll();
 require_once __DIR__ . '/../inc/header.php';
 ?>
-<h1 class="text-2xl font-semibold mb-4">Admin Dashboard</h1>
-<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-  <div class="bg-white p-4 rounded shadow">ผู้ใช้ทั้งหมด: <?= $c1 ?></div>
-  <div class="bg-white p-4 rounded shadow">สินค้าทั้งหมด: <?= $c2 ?></div>
-  <div class="bg-white p-4 rounded shadow">คำสั่งซื้อทั้งหมด: <?= $c3 ?></div>
+<h1 class="text-2xl font-semibold mb-4">Seller Dashboard</h1>
+<div class="bg-white p-4 rounded shadow">
+  <h2 class="font-semibold">เพิ่มสินค้าใหม่ (จะรอการอนุมัติจาก Admin)</h2>
+  <form method="post" class="mt-2">
+    <input type="hidden" name="action" value="create">
+    <input name="name" placeholder="ชื่อสินค้า" class="w-full border p-2 rounded mt-1">
+    <input name="price" placeholder="ราคา" class="w-full border p-2 rounded mt-1">
+    <textarea name="description" placeholder="รายละเอียด" class="w-full border p-2 rounded mt-1"></textarea>
+    <div class="mt-2"><button class="px-4 py-2 rounded bg-blue-600 text-white">เพิ่ม</button></div>
+  </form>
 </div>
-<div class="mt-6 bg-white p-4 rounded shadow">
-  <h2 class="font-semibold">จัดการสินค้า (รออนุมัติ)</h2>
-  <?php
-  $stmt = $pdo->query('SELECT p.*, u.name AS seller FROM products p LEFT JOIN users u ON p.seller_id = u.id WHERE p.approved = 0');
-  $pending = $stmt->fetchAll();
-  foreach($pending as $p): ?>
-    <div class="border-b py-2 flex justify-between items-center">
-      <div><?= htmlspecialchars($p['name']) ?> (โดย <?= htmlspecialchars($p['seller']) ?>)</div>
-      <div>
-        <a href="/admin/product_approve.php?id=<?= $p['id'] ?>" class="px-2 py-1 bg-green-600 text-white rounded">อนุมัติ</a>
-        <a href="/admin/product_delete.php?id=<?= $p['id'] ?>" class="px-2 py-1 bg-red-600 text-white rounded">ลบ</a>
-      </div>
+<div class="mt-4 bg-white p-4 rounded shadow">
+  <h2 class="font-semibold">สินค้าของฉัน</h2>
+  <?php foreach($products as $p): ?>
+    <div class="border-b py-2 flex justify-between">
+      <div><?= htmlspecialchars($p['name']) ?> - <?= number_format($p['price'],2) ?> ฿ (<?= $p['approved'] ? 'อนุมัติ' : 'รออนุมัติ' ?>)</div>
+      <div><a href="/seller/product_edit.php?id=<?= $p['id'] ?>" class="text-sm text-blue-600">แก้ไข</a></div>
     </div>
   <?php endforeach; ?>
 </div>
